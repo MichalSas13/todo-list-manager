@@ -44,7 +44,7 @@ const TaskItem = ({ id, title, completed, onEdit, onDelete, onToggle }) => {
         <input
           type="checkbox"
           checked={completed || false}
-          onChange={() => onToggle(id)}
+          onChange={(e) => onToggle(id, e.target.checked)} // Przekazujemy nową wartość
           className="mr-2"
         />
         <span className={completed ? 'line-through text-gray-500' : ''}>
@@ -138,50 +138,52 @@ export default function Tasks() {
   const saveEdit = async (taskId) => {
     if (!editTaskTitle.trim()) return;
     console.log('Saving edit for task:', taskId, 'new title:', editTaskTitle);
-    const { error } = await supabase
-      .from('tasks')
-      .update({ title: editTaskTitle.trim() })
-      .eq('id', taskId)
-      .eq('user_id', user.id);
-    if (error) {
-      console.error('Error editing task:', error.message, error.details);
-    } else {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ title: editTaskTitle.trim() })
+        .eq('id', taskId)
+        .eq('user_id', user.id);
+      if (error) throw error;
       console.log('Task edited:', taskId);
       setTasks(tasks.map(task => task.id === taskId ? { ...task, title: editTaskTitle.trim() } : task));
       setEditTaskId(null);
       setEditTaskTitle('');
+    } catch (error) {
+      console.error('Error editing task:', error.message, error.details);
     }
   };
 
   const deleteTask = async (taskId) => {
     console.log('Deleting task:', taskId);
-    const { error } = await supabase
-      .from('tasks')
-      .delete()
-      .eq('id', taskId)
-      .eq('user_id', user.id);
-    if (error) {
-      console.error('Error deleting task:', error.message, error.details);
-    } else {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId)
+        .eq('user_id', user.id);
+      if (error) throw error;
       console.log('Task deleted:', taskId);
       setTasks(tasks.filter(task => task.id !== taskId));
+    } catch (error) {
+      console.error('Error deleting task:', error.message, error.details);
     }
   };
 
-  const toggleTaskCompleted = async (taskId) => {
+  const toggleTaskCompleted = async (taskId, checked) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    const newCompleted = !task.completed; // Oblicz nową wartość przed aktualizacją
-    console.log('Toggling task:', taskId, 'to:', newCompleted);
-    const { error } = await supabase
-      .from('tasks')
-      .update({ completed: newCompleted })
-      .eq('id', taskId)
-      .eq('user_id', user.id);
-    if (error) {
+    console.log('Toggling task:', taskId, 'to:', checked);
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ completed: checked })
+        .eq('id', taskId)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      setTasks(tasks.map(task => task.id === taskId ? { ...task, completed: checked } : task));
+    } catch (error) {
       console.error('Error toggling task:', error.message, error.details);
-    } else {
-      setTasks(tasks.map(task => task.id === taskId ? { ...task, completed: newCompleted } : task));
     }
   };
 
@@ -216,7 +218,7 @@ export default function Tasks() {
                   key={task.id}
                   id={task.id}
                   title={editTaskId === task.id ? editTaskTitle : task.title}
-                  completed={editTaskId === task.id ? false : task.completed} // Wyłącz checkbox podczas edycji
+                  completed={editTaskId === task.id ? false : task.completed}
                   onEdit={editTask}
                   onDelete={deleteTask}
                   onToggle={toggleTaskCompleted}
