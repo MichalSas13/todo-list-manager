@@ -16,7 +16,17 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+const DragHandle = ({ listeners }) => (
+  <span
+    {...listeners}
+    className="cursor-grab px-2 text-gray-400 hover:text-gray-600"
+    title="Drag to reorder"
+  >
+    &#9776;
+  </span>
+);
 
 const TaskItem = ({ id, title, completed, onEdit, onDelete, onToggle }) => {
   const {
@@ -25,10 +35,10 @@ const TaskItem = ({ id, title, completed, onEdit, onDelete, onToggle }) => {
     setNodeRef,
     transform,
     transition,
-  } = useSortable({ id: id.toString() });
+  } = useSortable({ id: id.toString(), handle: true }); // Only allow drag by handle
 
   const style = {
-    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : 'none',
+    transform: CSS.Transform.toString(transform),
     transition,
   };
 
@@ -37,27 +47,37 @@ const TaskItem = ({ id, title, completed, onEdit, onDelete, onToggle }) => {
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
       className="border-b py-2 flex items-center justify-between"
     >
       <div className="flex items-center w-full">
+        <DragHandle listeners={listeners} />
         <input
           type="checkbox"
           checked={completed || false}
-          onChange={(e) => onToggle(id, e.target.checked)} // Przekazujemy nową wartość
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            e.stopPropagation();
+            onToggle(id, e.target.checked);
+          }}
           className="mr-2"
         />
-        <span className={completed ? 'line-through text-gray-500' : ''}>
+        <span className={`flex-1 ${completed ? 'line-through text-gray-500' : ''}`}>
           {title}
         </span>
         <button
-          onClick={() => onDelete(id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(id);
+          }}
           className="bg-red-500 text-white p-1 rounded ml-2 hover:bg-red-600"
         >
           Delete
         </button>
         <button
-          onClick={() => onEdit(id, title)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(id, title);
+          }}
           className="bg-yellow-500 text-white p-1 rounded ml-2 hover:bg-yellow-600"
         >
           Edit
@@ -99,7 +119,6 @@ export default function Tasks() {
 
   const addTask = async () => {
     if (!newTask.trim() || !user) return;
-    console.log('Adding task:', newTask, 'for user:', user.id);
     const { data, error } = await supabase
       .from('tasks')
       .insert([{ title: newTask.trim(), user_id: user.id, completed: false }])
@@ -107,7 +126,6 @@ export default function Tasks() {
     if (error) {
       console.error('Error adding task:', error.message, error.details);
     } else {
-      console.log('Task added:', data);
       setTasks([...tasks, ...(data || [])]);
       setNewTask('');
     }
@@ -115,7 +133,7 @@ export default function Tasks() {
 
   const handleDragEnd = async (event) => {
     const { active, over } = event;
-    if (active.id !== over.id) {
+    if (active.id !== over?.id) {
       const oldIndex = tasks.findIndex(task => task.id.toString() === active.id);
       const newIndex = tasks.findIndex(task => task.id.toString() === over.id);
       const newTasks = arrayMove(tasks, oldIndex, newIndex);
@@ -137,7 +155,6 @@ export default function Tasks() {
 
   const saveEdit = async (taskId) => {
     if (!editTaskTitle.trim()) return;
-    console.log('Saving edit for task:', taskId, 'new title:', editTaskTitle);
     try {
       const { error } = await supabase
         .from('tasks')
@@ -145,7 +162,6 @@ export default function Tasks() {
         .eq('id', taskId)
         .eq('user_id', user.id);
       if (error) throw error;
-      console.log('Task edited:', taskId);
       setTasks(tasks.map(task => task.id === taskId ? { ...task, title: editTaskTitle.trim() } : task));
       setEditTaskId(null);
       setEditTaskTitle('');
@@ -155,7 +171,6 @@ export default function Tasks() {
   };
 
   const deleteTask = async (taskId) => {
-    console.log('Deleting task:', taskId);
     try {
       const { error } = await supabase
         .from('tasks')
@@ -163,7 +178,6 @@ export default function Tasks() {
         .eq('id', taskId)
         .eq('user_id', user.id);
       if (error) throw error;
-      console.log('Task deleted:', taskId);
       setTasks(tasks.filter(task => task.id !== taskId));
     } catch (error) {
       console.error('Error deleting task:', error.message, error.details);
@@ -173,7 +187,6 @@ export default function Tasks() {
   const toggleTaskCompleted = async (taskId, checked) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    console.log('Toggling task:', taskId, 'to:', checked);
     try {
       const { error } = await supabase
         .from('tasks')
