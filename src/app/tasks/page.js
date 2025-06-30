@@ -16,7 +16,7 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/sortable'; // Poprawny import CSS
+import { CSS } from '@dnd-kit/sortable'; // Import nadal potrzebny
 
 const TaskItem = ({ id, title, completed, onEdit, onDelete, onToggle }) => {
   const {
@@ -27,8 +27,9 @@ const TaskItem = ({ id, title, completed, onEdit, onDelete, onToggle }) => {
     transition,
   } = useSortable({ id: id.toString() });
 
+  // Zabezpieczenie przed undefined Transform
   const style = {
-    transform: CSS.Transform.toString(transform), // Użycie zaimportowanego CSS.Transform
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : 'none',
     transition,
   };
 
