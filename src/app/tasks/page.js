@@ -51,16 +51,16 @@ const TaskItem = ({ id, title, completed, onEdit, onDelete, onToggle }) => {
           {title}
         </span>
         <button
-          onClick={() => onEdit(id, title)}
-          className="bg-yellow-500 text-white p-1 rounded ml-2 hover:bg-yellow-600"
-        >
-          Edit
-        </button>
-        <button
           onClick={() => onDelete(id)}
           className="bg-red-500 text-white p-1 rounded ml-2 hover:bg-red-600"
         >
           Delete
+        </button>
+        <button
+          onClick={() => onEdit(id, title)}
+          className="bg-yellow-500 text-white p-1 rounded ml-2 hover:bg-yellow-600"
+        >
+          Edit
         </button>
       </div>
     </li>
@@ -170,16 +170,18 @@ export default function Tasks() {
 
   const toggleTaskCompleted = async (taskId) => {
     const task = tasks.find(t => t.id === taskId);
-    console.log('Toggling task:', taskId, task.completed);
+    if (!task) return;
+    const newCompleted = !task.completed; // Oblicz nową wartość przed aktualizacją
+    console.log('Toggling task:', taskId, 'to:', newCompleted);
     const { error } = await supabase
       .from('tasks')
-      .update({ completed: !task.completed })
+      .update({ completed: newCompleted })
       .eq('id', taskId)
       .eq('user_id', user.id);
     if (error) {
       console.error('Error toggling task:', error.message, error.details);
     } else {
-      setTasks(tasks.map(task => task.id === taskId ? { ...task, completed: !task.completed } : task));
+      setTasks(tasks.map(task => task.id === taskId ? { ...task, completed: newCompleted } : task));
     }
   };
 
@@ -214,7 +216,7 @@ export default function Tasks() {
                   key={task.id}
                   id={task.id}
                   title={editTaskId === task.id ? editTaskTitle : task.title}
-                  completed={task.completed}
+                  completed={editTaskId === task.id ? false : task.completed} // Wyłącz checkbox podczas edycji
                   onEdit={editTask}
                   onDelete={deleteTask}
                   onToggle={toggleTaskCompleted}
