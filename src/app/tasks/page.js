@@ -16,7 +16,7 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/sortable'; // Import nadal potrzebny
+import { CSS } from '@dnd-kit/sortable';
 
 const TaskItem = ({ id, title, completed, onEdit, onDelete, onToggle }) => {
   const {
@@ -27,7 +27,6 @@ const TaskItem = ({ id, title, completed, onEdit, onDelete, onToggle }) => {
     transition,
   } = useSortable({ id: id.toString() });
 
-  // Zabezpieczenie przed undefined Transform
   const style = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : 'none',
     transition,
@@ -90,24 +89,26 @@ export default function Tasks() {
         .eq('user_id', user.id)
         .order('id', { ascending: true });
       if (error) {
-        console.error('Error fetching tasks:', error);
+        console.error('Error fetching tasks:', error.message);
       } else {
-        setTasks(data);
+        setTasks(data || []);
       }
     };
     fetchUserAndTasks();
   }, [router]);
 
   const addTask = async () => {
-    if (!newTask || !user) return;
+    if (!newTask.trim() || !user) return;
+    console.log('Adding task:', newTask, 'for user:', user.id);
     const { data, error } = await supabase
       .from('tasks')
-      .insert([{ title: newTask, user_id: user.id, completed: false }])
+      .insert([{ title: newTask.trim(), user_id: user.id, completed: false }])
       .select();
     if (error) {
-      console.error('Error adding task:', error);
+      console.error('Error adding task:', error.message, error.details);
     } else {
-      setTasks([...tasks, ...data]);
+      console.log('Task added:', data);
+      setTasks([...tasks, ...(data || [])]);
       setNewTask('');
     }
   };
@@ -119,10 +120,6 @@ export default function Tasks() {
       const newIndex = tasks.findIndex(task => task.id.toString() === over.id);
       const newTasks = arrayMove(tasks, oldIndex, newIndex);
       setTasks(newTasks);
-      // Aktualizacja kolejności w bazie (opcjonalne, wymaga kolumny 'order')
-      // const updates = newTasks.map((task, index) => ({ id: task.id, order: index }));
-      // const { error } = await supabase.from('tasks').update(updates).eq('user_id', user.id);
-      // if (error) console.error('Error updating order:', error);
     }
   };
 
@@ -139,42 +136,48 @@ export default function Tasks() {
   };
 
   const saveEdit = async (taskId) => {
+    if (!editTaskTitle.trim()) return;
+    console.log('Saving edit for task:', taskId, 'new title:', editTaskTitle);
     const { error } = await supabase
       .from('tasks')
-      .update({ title: editTaskTitle })
+      .update({ title: editTaskTitle.trim() })
       .eq('id', taskId)
       .eq('user_id', user.id);
     if (error) {
-      console.error('Error editing task:', error);
+      console.error('Error editing task:', error.message, error.details);
     } else {
-      setTasks(tasks.map(task => task.id === taskId ? { ...task, title: editTaskTitle } : task));
+      console.log('Task edited:', taskId);
+      setTasks(tasks.map(task => task.id === taskId ? { ...task, title: editTaskTitle.trim() } : task));
       setEditTaskId(null);
       setEditTaskTitle('');
     }
   };
 
   const deleteTask = async (taskId) => {
+    console.log('Deleting task:', taskId);
     const { error } = await supabase
       .from('tasks')
       .delete()
       .eq('id', taskId)
       .eq('user_id', user.id);
     if (error) {
-      console.error('Error deleting task:', error);
+      console.error('Error deleting task:', error.message, error.details);
     } else {
+      console.log('Task deleted:', taskId);
       setTasks(tasks.filter(task => task.id !== taskId));
     }
   };
 
   const toggleTaskCompleted = async (taskId) => {
     const task = tasks.find(t => t.id === taskId);
+    console.log('Toggling task:', taskId, task.completed);
     const { error } = await supabase
       .from('tasks')
       .update({ completed: !task.completed })
       .eq('id', taskId)
       .eq('user_id', user.id);
     if (error) {
-      console.error('Error toggling task:', error);
+      console.error('Error toggling task:', error.message, error.details);
     } else {
       setTasks(tasks.map(task => task.id === taskId ? { ...task, completed: !task.completed } : task));
     }
@@ -222,9 +225,15 @@ export default function Tasks() {
         </DndContext>
         {editTaskId && (
           <div className="mt-2">
+            <input
+              type="text"
+              value={editTaskTitle}
+              onChange={(e) => setEditTaskTitle(e.target.value)}
+              className="border p-1 w-full"
+            />
             <button
               onClick={() => saveEdit(editTaskId)}
-              className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
+              className="bg-green-500 text-white p-1 rounded hover:bg-green-600 ml-2"
             >
               Save
             </button>
