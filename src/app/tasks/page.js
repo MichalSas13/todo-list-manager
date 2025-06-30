@@ -2,11 +2,77 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/sortable';
+
+const TaskItem = ({ id, title, completed, onEdit, onDelete, onToggle }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: id.toString() });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="border-b py-2 flex items-center justify-between"
+    >
+      <div className="flex items-center w-full">
+        <input
+          type="checkbox"
+          checked={completed || false}
+          onChange={() => onToggle(id)}
+          className="mr-2"
+        />
+        <span className={completed ? 'line-through text-gray-500' : ''}>
+          {title}
+        </span>
+        <button
+          onClick={() => onEdit(id, title)}
+          className="bg-yellow-500 text-white p-1 rounded ml-2 hover:bg-yellow-600"
+        >
+          Edit
+        </button>
+        <button
+          onClick={() => onDelete(id)}
+          className="bg-red-500 text-white p-1 rounded ml-2 hover:bg-red-600"
+        >
+          Delete
+        </button>
+      </div>
+    </li>
+  );
+};
 
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState('');
   const [user, setUser] = useState(null);
+  const [editTaskId, setEditTaskId] = useState(null);
+  const [editTaskTitle, setEditTaskTitle] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -20,7 +86,8 @@ export default function Tasks() {
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .order('id', { ascending: true });
       if (error) {
         console.error('Error fetching tasks:', error);
       } else {
@@ -34,13 +101,81 @@ export default function Tasks() {
     if (!newTask || !user) return;
     const { data, error } = await supabase
       .from('tasks')
-      .insert([{ title: newTask, user_id: user.id }])
+      .insert([{ title: newTask, user_id: user.id, completed: false }])
       .select();
     if (error) {
       console.error('Error adding task:', error);
     } else {
       setTasks([...tasks, ...data]);
       setNewTask('');
+    }
+  };
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    if (active.id !== over.id) {
+      const oldIndex = tasks.findIndex(task => task.id.toString() === active.id);
+      const newIndex = tasks.findIndex(task => task.id.toString() === over.id);
+      const newTasks = arrayMove(tasks, oldIndex, newIndex);
+      setTasks(newTasks);
+      // Aktualizacja kolejności w bazie (opcjonalne, wymaga kolumny 'order')
+      // const updates = newTasks.map((task, index) => ({ id: task.id, order: index }));
+      // const { error } = await supabase.from('tasks').update(updates).eq('user_id', user.id);
+      // if (error) console.error('Error updating order:', error);
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const editTask = (taskId, title) => {
+    setEditTaskId(taskId);
+    setEditTaskTitle(title);
+  };
+
+  const saveEdit = async (taskId) => {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ title: editTaskTitle })
+      .eq('id', taskId)
+      .eq('user_id', user.id);
+    if (error) {
+      console.error('Error editing task:', error);
+    } else {
+      setTasks(tasks.map(task => task.id === taskId ? { ...task, title: editTaskTitle } : task));
+      setEditTaskId(null);
+      setEditTaskTitle('');
+    }
+  };
+
+  const deleteTask = async (taskId) => {
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', taskId)
+      .eq('user_id', user.id);
+    if (error) {
+      console.error('Error deleting task:', error);
+    } else {
+      setTasks(tasks.filter(task => task.id !== taskId));
+    }
+  };
+
+  const toggleTaskCompleted = async (taskId) => {
+    const task = tasks.find(t => t.id === taskId);
+    const { error } = await supabase
+      .from('tasks')
+      .update({ completed: !task.completed })
+      .eq('id', taskId)
+      .eq('user_id', user.id);
+    if (error) {
+      console.error('Error toggling task:', error);
+    } else {
+      setTasks(tasks.map(task => task.id === taskId ? { ...task, completed: !task.completed } : task));
     }
   };
 
@@ -67,13 +202,33 @@ export default function Tasks() {
         >
           Add Task
         </button>
-        <ul className="mt-4">
-          {tasks.map((task) => (
-            <li key={task.id} className="border-b py-2">
-              {task.title}
-            </li>
-          ))}
-        </ul>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={tasks.map(task => task.id.toString())}>
+            <ul className="mt-4">
+              {tasks.map((task) => (
+                <TaskItem
+                  key={task.id}
+                  id={task.id}
+                  title={editTaskId === task.id ? editTaskTitle : task.title}
+                  completed={task.completed}
+                  onEdit={editTask}
+                  onDelete={deleteTask}
+                  onToggle={toggleTaskCompleted}
+                />
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
+        {editTaskId && (
+          <div className="mt-2">
+            <button
+              onClick={() => saveEdit(editTaskId)}
+              className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
+            >
+              Save
+            </button>
+          </div>
+        )}
         <button
           onClick={signOut}
           className="bg-red-500 text-white p-2 rounded hover:bg-red-600 mt-4 w-full"
