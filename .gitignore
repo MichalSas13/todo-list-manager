@@ -84,8 +84,6 @@ dist
 
 # Gatsby files
 .cache/
-# Comment in the public line in if your project uses Gatsby and not Next.js
-# https://nextjs.org/blog/next-9-1#public-directory-support
 # public
 
 # vuepress build output
@@ -125,15 +123,11 @@ dist
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
 
-# yarn v3
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
-
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# GitHub additions
+.DS_Store
+*.pem
+.vercel
